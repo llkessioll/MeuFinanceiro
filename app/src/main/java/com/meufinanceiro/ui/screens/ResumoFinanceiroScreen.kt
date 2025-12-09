@@ -8,26 +8,61 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import androidx.room.Room
+import com.meufinanceiro.backend.db.AppDatabase
+import com.meufinanceiro.backend.repository.TransacaoRepository
+import com.meufinanceiro.backend.service.ResumoFinanceiroService
+import com.meufinanceiro.ui.viewmodel.ResumoFinanceiroFactory
+import com.meufinanceiro.ui.viewmodel.ResumoFinanceiroViewModel
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ResumoFinanceiroScreen(
-    navController: NavController,
-    // depois conectamos isso ao backend
-    totalReceitas: Double = 2500.0,
-    totalDespesas: Double = 780.0
-) {
-    val saldo = totalReceitas - totalDespesas
+fun ResumoFinanceiroScreen(navController: NavController) {
+
+    val context = LocalContext.current
+
+    // Instancia o banco
+    val db = remember {
+        Room.databaseBuilder(
+            context,
+            AppDatabase::class.java,
+            "meu_financeiro.db"
+        ).build()
+    }
+
+    // Instancia o service real
+    val service = remember {
+        ResumoFinanceiroService(
+            transacaoRepository = TransacaoRepository(
+                dao = db.transacaoDao()
+            )
+        )
+    }
+
+    // ViewModel
+    val viewModel: ResumoFinanceiroViewModel = viewModel(
+        factory = ResumoFinanceiroFactory(service)
+    )
+
+    val receitas by viewModel.totalReceitas.collectAsState()
+    val despesas by viewModel.totalDespesas.collectAsState()
+    val saldo by viewModel.saldo.collectAsState()
 
     Scaffold(
         topBar = {
-            SmallTopAppBar(
+            TopAppBar(
                 title = { Text("Resumo Financeiro") },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Voltar")
+                        Icon(
+                            imageVector = Icons.Filled.ArrowBack,
+                            contentDescription = "Voltar"
+                        )
                     }
                 }
             )
@@ -44,14 +79,14 @@ fun ResumoFinanceiroScreen(
 
             CardResumo(
                 titulo = "Receitas",
-                valor = totalReceitas,
+                valor = receitas,
                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
                 textColor = MaterialTheme.colorScheme.primary
             )
 
             CardResumo(
                 titulo = "Despesas",
-                valor = totalDespesas,
+                valor = despesas,
                 color = MaterialTheme.colorScheme.error.copy(alpha = 0.15f),
                 textColor = MaterialTheme.colorScheme.error
             )
@@ -80,29 +115,26 @@ fun CardResumo(
     textColor: androidx.compose.ui.graphics.Color
 ) {
     Card(
-        shape = RoundedCornerShape(18.dp),
-        elevation = CardDefaults.cardElevation(4.dp),
-        colors = CardDefaults.cardColors(containerColor = color),
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(130.dp)
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = color)
     ) {
-
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(20.dp),
-            verticalArrangement = Arrangement.SpaceBetween
+                .padding(20.dp)
+                .fillMaxWidth()
         ) {
 
             Text(
                 text = titulo,
-                style = MaterialTheme.typography.titleMedium,
+                fontSize = 20.sp,
                 color = textColor
             )
 
+            Spacer(modifier = Modifier.height(8.dp))
+
             Text(
-                text = "R$ %.2f".format(valor),
+                text = String.format("R$ %.2f", valor),
                 fontSize = 26.sp,
                 color = textColor
             )
