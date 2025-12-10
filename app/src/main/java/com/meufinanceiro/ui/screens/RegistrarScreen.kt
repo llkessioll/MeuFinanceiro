@@ -5,20 +5,21 @@ import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material.icons.filled.Category
-import androidx.compose.material.icons.filled.Money
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.meufinanceiro.navigation.Screen
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -26,32 +27,34 @@ import java.util.*
 @Composable
 fun RegistrarScreen(
     navController: NavController,
-    // callback para ligar ao backend quando quiser: recebe tipo, valor, dataMillis, categoria, descricao
+    // callback para ligar ao backend quando quiser
     onSave: suspend (tipo: TipoTela, valor: Double, dataMillis: Long, categoria: String, descricao: String?) -> Unit = { _, _, _, _, _ -> }
 ) {
     val context = LocalContext.current
-    val scaffoldState = rememberScaffoldState() // Material3 ainda usa SnackbarHostState; scaffoldState kept for compatibility
+
+    // ESTADOS DO FORMULÁRIO
     var amountText by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf<String?>(null) }
     var tipo by remember { mutableStateOf(TipoTela.DESPESA) }
+
     val sdf = remember { SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()) }
 
-    // default date = today
+    // DATA (Padrão = Hoje)
     val calendar = remember { Calendar.getInstance() }
     var dateMillis by remember { mutableStateOf(calendar.timeInMillis) }
     var isSaving by remember { mutableStateOf(false) }
 
-    // sample categories — depois você puxa do repo real
+    // Categorias de exemplo
     val sampleCategories = listOf("Alimentação", "Transporte", "Salário", "Lazer", "Outros")
 
     Scaffold(
         topBar = {
-            SmallTopAppBar(
+            TopAppBar(
                 title = { Text("Registrar Transação") },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.Money, contentDescription = "Voltar")
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Voltar")
                     }
                 }
             )
@@ -64,38 +67,47 @@ fun RegistrarScreen(
                 .padding(horizontal = 20.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Tipo (Receita / Despesa) - segmented like chips
+            // 1. SELETOR DE TIPO (Receita / Despesa)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 FilterChip(
                     selected = tipo == TipoTela.RECEITA,
                     onClick = { tipo = TipoTela.RECEITA },
-                    label = { Text("Receita") }
+                    label = { Text("Receita") },
+                    leadingIcon = {
+                        if (tipo == TipoTela.RECEITA) {
+                            Icon(Icons.Default.Check, contentDescription = null)
+                        }
+                    }
                 )
                 FilterChip(
                     selected = tipo == TipoTela.DESPESA,
                     onClick = { tipo = TipoTela.DESPESA },
-                    label = { Text("Despesa") }
+                    label = { Text("Despesa") },
+                    leadingIcon = {
+                        if (tipo == TipoTela.DESPESA) {
+                            Icon(Icons.Default.Check, contentDescription = null)
+                        }
+                    }
                 )
             }
 
-            // Valor
+            // 2. CAMPO DE VALOR
             OutlinedTextField(
                 value = amountText,
                 onValueChange = { new ->
-                    // allow only numbers and dot/comma
+                    // Permite apenas números, ponto e vírgula
                     val filtered = new.filter { it.isDigit() || it == '.' || it == ',' }
                     amountText = filtered
                 },
                 label = { Text("Valor (ex: 123.45)") },
-                keyboardOptions = androidx.compose.ui.text.input.KeyboardOptions.Default.copy(
-                    keyboardType = KeyboardType.Number
-                ),
-                leadingIcon = { Icon(Icons.Default.Money, contentDescription = null) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                // Troquei o ícone Money (que falta) pelo ShoppingCart
+                leadingIcon = { Icon(Icons.Default.ShoppingCart, contentDescription = null) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
 
-            // Data (DatePicker)
+            // 3. CAMPO DE DATA (DatePicker)
             val dateLabel = remember(dateMillis) { sdf.format(Date(dateMillis)) }
             val datePickerOnClick = {
                 val c = Calendar.getInstance().apply { timeInMillis = dateMillis }
@@ -120,11 +132,13 @@ fun RegistrarScreen(
                     .fillMaxWidth()
                     .clickable { datePickerOnClick() },
                 label = { Text("Data") },
-                leadingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null) }
+                // Troquei CalendarToday (que falta) pelo DateRange
+                leadingIcon = { Icon(Icons.Default.DateRange, contentDescription = null) }
             )
 
-            // Categoria (dropdown)
+            // 4. CAMPO DE CATEGORIA (Dropdown)
             var expanded by remember { mutableStateOf(false) }
+
             ExposedDropdownMenuBox(
                 expanded = expanded,
                 onExpandedChange = { expanded = it }
@@ -135,9 +149,10 @@ fun RegistrarScreen(
                     onValueChange = {},
                     modifier = Modifier
                         .fillMaxWidth()
-                        .menuAnchor(),
+                        .menuAnchor(), // Importante para o Menu
                     label = { Text("Categoria") },
-                    leadingIcon = { Icon(Icons.Default.Category, contentDescription = null) },
+                    // Troquei Category (que falta) pelo List
+                    leadingIcon = { Icon(Icons.Default.List, contentDescription = null) },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) }
                 )
                 ExposedDropdownMenu(
@@ -156,7 +171,7 @@ fun RegistrarScreen(
                 }
             }
 
-            // Descrição
+            // 5. CAMPO DE DESCRIÇÃO
             OutlinedTextField(
                 value = description,
                 onValueChange = { description = it },
@@ -166,10 +181,10 @@ fun RegistrarScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Save button
+            // 6. BOTÃO DE SALVAR
             Button(
                 onClick = {
-                    // validar
+                    // Validação simples
                     val parsed = amountText.replace(",", ".").toDoubleOrNull()
                     when {
                         parsed == null -> {
@@ -182,13 +197,9 @@ fun RegistrarScreen(
                             Toast.makeText(context, "Escolha uma categoria", Toast.LENGTH_SHORT).show()
                         }
                         else -> {
-                            // por enquanto, só feedback visual e voltar
                             isSaving = true
-                            // aqui você pode chamar o onSave em uma coroutine (ViewModel)
-                            // Exemplo simplificado: mostrar toast e voltar
                             Toast.makeText(context, "Salvando...", Toast.LENGTH_SHORT).show()
-                            // TODO: chamar onSave(...) usando scope no ViewModel
-                            navController.popBackStack() // volta para home/historico
+                            navController.popBackStack()
                         }
                     }
                 },
@@ -203,10 +214,7 @@ fun RegistrarScreen(
     }
 }
 
-/**
- * Tipo usado aqui só para UI local.
- * Quando integrar com o backend, substitua pelo seu TipoTransacao model do backend.
- */
+// ENUM auxiliar
 enum class TipoTela {
     RECEITA, DESPESA
 }

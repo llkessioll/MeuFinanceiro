@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.meufinanceiro.backend.model.TransacaoComCategoria
 import com.meufinanceiro.backend.repository.TransacaoRepository
+import com.meufinanceiro.ui.extensions.toTransacao
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch

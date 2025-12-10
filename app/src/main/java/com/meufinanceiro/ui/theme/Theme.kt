@@ -19,6 +19,10 @@ private val LightColorScheme = lightColorScheme(
     secondary = AzulSecundario,
     onSecondary = Color.White,
 
+    // Adicionando a cor de ERRO (usada para Despesa)
+    error = CorDespesa,
+    onError = Color.White,
+
     background = FundoClaro,
     onBackground = TextoPrimarioClaro,
 
@@ -38,6 +42,10 @@ private val DarkColorScheme = darkColorScheme(
     secondary = AzulSecundarioEscuro,
     onSecondary = Color.Black,
 
+    // Adicionando a cor de ERRO ESCURO (usada para Despesa)
+    error = CorDespesaEscuro,
+    onError = Color.Black, // Texto sobre erro deve ser escuro no modo dark
+
     background = FundoEscuro,
     onBackground = TextoPrimarioEscuro,
 
@@ -45,17 +53,12 @@ private val DarkColorScheme = darkColorScheme(
     onSurface = TextoPrimarioEscuro
 )
 
-// ----------------------
-// THEME
-// ----------------------
 @Composable
 fun MeuFinanceiroTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
-    val colors =
-        if (darkTheme) DarkColorScheme
-        else LightColorScheme
+    val colors = if (darkTheme) DarkColorScheme else LightColorScheme
 
     MaterialTheme(
         colorScheme = colors,
