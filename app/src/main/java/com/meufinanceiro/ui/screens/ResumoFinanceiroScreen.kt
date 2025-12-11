@@ -16,6 +16,7 @@ import androidx.room.Room
 import com.meufinanceiro.backend.db.AppDatabase
 import com.meufinanceiro.backend.repository.TransacaoRepository
 import com.meufinanceiro.backend.service.ResumoFinanceiroService
+import com.meufinanceiro.ui.extensions.toCurrency
 import com.meufinanceiro.ui.viewmodel.ResumoFinanceiroFactory
 import com.meufinanceiro.ui.viewmodel.ResumoFinanceiroViewModel
 
@@ -133,7 +134,7 @@ fun CardResumo(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = String.format("R$ %.2f", valor),
+                text = valor.toCurrency(),
                 fontSize = 26.sp,
                 color = textColor
             )

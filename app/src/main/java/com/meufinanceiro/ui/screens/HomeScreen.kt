@@ -30,6 +30,7 @@ import androidx.room.Room
 import com.meufinanceiro.backend.db.AppDatabase
 import com.meufinanceiro.backend.repository.TransacaoRepository
 import com.meufinanceiro.navigation.Screen
+import com.meufinanceiro.ui.extensions.toCurrency
 import com.meufinanceiro.ui.viewmodel.HomeViewModel
 import com.meufinanceiro.ui.viewmodel.HomeViewModelFactory
 
@@ -181,7 +182,7 @@ fun HomeScreen(navController: NavController) {
                         Spacer(modifier = Modifier.height(4.dp))
 
                         Text(
-                            text = if (showBalance) "R$ %.2f".format(saldo) else "R$ •••••",
+                            text = if (showBalance) saldo.toCurrency() else "R$ •••••",
                             color = Color.White,
                             fontSize = 32.sp,
                             fontWeight = FontWeight.Bold

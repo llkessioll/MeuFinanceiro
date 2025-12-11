@@ -24,6 +24,7 @@ import androidx.navigation.NavController
 import androidx.room.Room
 import com.meufinanceiro.backend.db.AppDatabase
 import com.meufinanceiro.backend.model.Categoria
+import com.meufinanceiro.backend.model.TipoTransacao
 import com.meufinanceiro.backend.repository.CategoriaRepository
 import com.meufinanceiro.backend.repository.TransacaoRepository
 import com.meufinanceiro.ui.viewmodel.RegistrarViewModel
@@ -33,40 +34,52 @@ import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RegistrarScreen(navController: NavController) {
+fun RegistrarScreen(
+    navController: NavController,
+    transacaoId: Long = 0L // NOVO: Recebe o ID para editar (0 = novo)
+) {
     val context = LocalContext.current
-
-    // 1. CONFIGURAÇÃO (Agora com 2 Repositórios: Transação e Categoria)
     val db = remember { Room.databaseBuilder(context, AppDatabase::class.java, "meu_financeiro.db").build() }
 
-    val transacaoRepo = remember { TransacaoRepository(db.transacaoDao()) }
-    val categoriaRepo = remember { CategoriaRepository(db.categoriaDao()) }
-
     val viewModel: RegistrarViewModel = viewModel(
-        factory = RegistrarViewModelFactory(transacaoRepo, categoriaRepo)
+        factory = RegistrarViewModelFactory(
+            TransacaoRepository(db.transacaoDao()),
+            CategoriaRepository(db.categoriaDao())
+        )
     )
 
-    // 2. ESTADOS
+    // Estados do Formulário
     var amountText by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
-
-    // Guarda o OBJETO Categoria completo (para termos o ID)
     var selectedCategory by remember { mutableStateOf<Categoria?>(null) }
-
     var tipo by remember { mutableStateOf(TipoTela.DESPESA) }
-    val sdf = remember { SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()) }
-
-    // Lista real vinda do banco de dados (via ViewModel)
-    val listaCategorias by viewModel.categorias.collectAsState()
 
     val calendar = remember { Calendar.getInstance() }
     var dateMillis by remember { mutableStateOf(calendar.timeInMillis) }
     var isSaving by remember { mutableStateOf(false) }
 
+    // --- LÓGICA DE CARREGAR DADOS (UPDATE) ---
+    LaunchedEffect(transacaoId) {
+        if (transacaoId > 0) {
+            viewModel.carregarDadosParaEdicao(transacaoId) { transacao, categoria ->
+                // Preenche os campos com os dados do banco
+                amountText = transacao.valor.toString().replace(".", ",")
+                description = transacao.descricao ?: ""
+                dateMillis = transacao.dataMillis
+                selectedCategory = categoria
+                tipo = if (transacao.tipo == TipoTransacao.RECEITA) TipoTela.RECEITA else TipoTela.DESPESA
+            }
+        }
+    }
+    // -----------------------------------------
+
+    val sdf = remember { SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()) }
+    val listaCategorias by viewModel.categorias.collectAsState()
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Registrar Transação") },
+                title = { Text(if (transacaoId > 0L) "Editar Transação" else "Nova Transação") },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Voltar")
@@ -82,7 +95,7 @@ fun RegistrarScreen(navController: NavController) {
                 .padding(horizontal = 20.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // TIPO (Receita / Despesa)
+            // TIPO
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 FilterChip(
                     selected = tipo == TipoTela.RECEITA,
@@ -101,13 +114,10 @@ fun RegistrarScreen(navController: NavController) {
             // VALOR
             OutlinedTextField(
                 value = amountText,
-                onValueChange = { new ->
-                    val filtered = new.filter { it.isDigit() || it == '.' || it == ',' }
-                    amountText = filtered
-                },
-                label = { Text("Valor (ex: 123.45)") },
+                onValueChange = { new -> amountText = new.filter { it.isDigit() || it == '.' || it == ',' } },
+                label = { Text("Valor") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                leadingIcon = { Icon(Icons.Default.ShoppingCart, contentDescription = null) },
+                leadingIcon = { Icon(Icons.Default.ShoppingCart, null) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -116,17 +126,11 @@ fun RegistrarScreen(navController: NavController) {
             val dateLabel = remember(dateMillis) { sdf.format(Date(dateMillis)) }
             val datePickerOnClick = {
                 val c = Calendar.getInstance().apply { timeInMillis = dateMillis }
-                DatePickerDialog(
-                    context,
-                    { _, year, month, dayOfMonth ->
-                        val nc = Calendar.getInstance()
-                        nc.set(year, month, dayOfMonth)
-                        dateMillis = nc.timeInMillis
-                    },
-                    c.get(Calendar.YEAR),
-                    c.get(Calendar.MONTH),
-                    c.get(Calendar.DAY_OF_MONTH)
-                ).show()
+                DatePickerDialog(context, { _, y, m, d ->
+                    val nc = Calendar.getInstance()
+                    nc.set(y, m, d)
+                    dateMillis = nc.timeInMillis
+                }, c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH)).show()
             }
 
             OutlinedTextField(
@@ -135,44 +139,27 @@ fun RegistrarScreen(navController: NavController) {
                 readOnly = true,
                 modifier = Modifier.fillMaxWidth().clickable { datePickerOnClick() },
                 label = { Text("Data") },
-                leadingIcon = { Icon(Icons.Default.DateRange, contentDescription = null) }
+                leadingIcon = { Icon(Icons.Default.DateRange, null) }
             )
 
-            // CATEGORIA (DROPDOWN REAL)
+            // CATEGORIA
             var expanded by remember { mutableStateOf(false) }
-            ExposedDropdownMenuBox(
-                expanded = expanded,
-                onExpandedChange = { expanded = it }
-            ) {
+            ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
                 OutlinedTextField(
                     readOnly = true,
-                    // Mostra o nome da categoria selecionada ou o aviso
                     value = selectedCategory?.nome ?: "Escolha uma categoria",
                     onValueChange = {},
                     modifier = Modifier.fillMaxWidth().menuAnchor(),
                     label = { Text("Categoria") },
-                    leadingIcon = { Icon(Icons.Default.List, contentDescription = null) },
+                    leadingIcon = { Icon(Icons.Default.List, null) },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) }
                 )
-                ExposedDropdownMenu(
-                    expanded = expanded,
-                    onDismissRequest = { expanded = false }
-                ) {
-                    if (listaCategorias.isEmpty()) {
+                ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                    listaCategorias.forEach { categoria ->
                         DropdownMenuItem(
-                            text = { Text("Nenhuma categoria cadastrada. Vá em 'Categorias' para criar.") },
-                            onClick = { expanded = false }
+                            text = { Text(categoria.nome) },
+                            onClick = { selectedCategory = categoria; expanded = false }
                         )
-                    } else {
-                        listaCategorias.forEach { categoria ->
-                            DropdownMenuItem(
-                                text = { Text(categoria.nome) },
-                                onClick = {
-                                    selectedCategory = categoria // Salva o OBJETO completo (com ID)
-                                    expanded = false
-                                }
-                            )
-                        }
                     }
                 }
             }
@@ -181,7 +168,7 @@ fun RegistrarScreen(navController: NavController) {
             OutlinedTextField(
                 value = description,
                 onValueChange = { description = it },
-                label = { Text("Descrição (opcional)") },
+                label = { Text("Descrição") },
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -192,44 +179,32 @@ fun RegistrarScreen(navController: NavController) {
                 enabled = !isSaving,
                 onClick = {
                     val parsed = amountText.replace(",", ".").toDoubleOrNull()
-                    when {
-                        parsed == null -> Toast.makeText(context, "Valor inválido", Toast.LENGTH_SHORT).show()
-                        parsed <= 0.0 -> Toast.makeText(context, "Valor deve ser maior que 0", Toast.LENGTH_SHORT).show()
-                        selectedCategory == null -> Toast.makeText(context, "Escolha uma categoria", Toast.LENGTH_SHORT).show()
-                        else -> {
-                            isSaving = true
-
-                            viewModel.salvarTransacao(
-                                tipoTela = tipo,
-                                valor = parsed,
-                                dataMillis = dateMillis,
-                                categoriaId = selectedCategory!!.id, // Envia o ID real
-                                descricao = description,
-                                onSuccess = {
-                                    isSaving = false
-                                    Toast.makeText(context, "Salvo com sucesso!", Toast.LENGTH_SHORT).show()
-                                    navController.popBackStack()
-                                },
-                                onError = { msg ->
-                                    isSaving = false
-                                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
-                                }
-                            )
-                        }
+                    if (parsed == null || parsed <= 0.0 || selectedCategory == null) {
+                        Toast.makeText(context, "Preencha valor e categoria", Toast.LENGTH_SHORT).show()
+                    } else {
+                        isSaving = true
+                        viewModel.salvarTransacao(
+                            tipoTela = tipo,
+                            valor = parsed,
+                            dataMillis = dateMillis,
+                            categoriaId = selectedCategory!!.id,
+                            descricao = description,
+                            onSuccess = {
+                                Toast.makeText(context, "Salvo com sucesso!", Toast.LENGTH_SHORT).show()
+                                navController.popBackStack()
+                            },
+                            onError = { isSaving = false }
+                        )
                     }
                 },
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                if (isSaving) {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(24.dp))
-                } else {
-                    Text("Salvar", fontSize = 16.sp)
-                }
+                if (isSaving) CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(24.dp))
+                else Text(if (transacaoId > 0L) "Atualizar" else "Salvar", fontSize = 16.sp)
             }
         }
     }
 }
-enum class TipoTela {
-    RECEITA, DESPESA
-}
+
+enum class TipoTela { RECEITA, DESPESA }

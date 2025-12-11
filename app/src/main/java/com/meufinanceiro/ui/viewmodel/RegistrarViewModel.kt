@@ -16,12 +16,14 @@ import kotlinx.coroutines.launch
 
 class RegistrarViewModel(
     private val transacaoRepository: TransacaoRepository,
-    private val categoriaRepository: CategoriaRepository // <--- NOVO: Precisamos disso
+    private val categoriaRepository: CategoriaRepository
 ) : ViewModel() {
 
-    // Lista de categorias REAIS do banco
     private val _categorias = MutableStateFlow<List<Categoria>>(emptyList())
     val categorias: StateFlow<List<Categoria>> = _categorias.asStateFlow()
+
+    // Armazena a transação que está sendo editada (se houver)
+    var transacaoIdAtual: Long = 0L
 
     init {
         carregarCategorias()
@@ -33,11 +35,24 @@ class RegistrarViewModel(
         }
     }
 
+    // NOVA FUNÇÃO: Carrega dados para editar
+    fun carregarDadosParaEdicao(id: Long, onResult: (Transacao, Categoria?) -> Unit) {
+        if (id == 0L) return
+        transacaoIdAtual = id
+
+        viewModelScope.launch {
+            val transacaoCompleta = transacaoRepository.buscarComCategoriaPorId(id)
+            if (transacaoCompleta != null) {
+                onResult(transacaoCompleta.transacao, transacaoCompleta.categoria)
+            }
+        }
+    }
+
     fun salvarTransacao(
         tipoTela: TipoTela,
         valor: Double,
         dataMillis: Long,
-        categoriaId: Long, // <--- MUDANÇA: Agora recebemos o ID direto, sem adivinhação
+        categoriaId: Long,
         descricao: String?,
         onSuccess: () -> Unit,
         onError: (String) -> Unit
@@ -49,10 +64,10 @@ class RegistrarViewModel(
                 TipoTransacao.DESPESA
 
             val novaTransacao = Transacao(
-                id = 0,
+                id = transacaoIdAtual, // Se for 0 cria novo, se for >0 atualiza
                 tipo = tipoBackend,
                 valor = valor,
-                categoriaId = categoriaId, // <--- ID correto vindo da tela
+                categoriaId = categoriaId,
                 descricao = descricao,
                 dataMillis = dataMillis
             )
@@ -68,15 +83,14 @@ class RegistrarViewModel(
     }
 }
 
-// Factory atualizada para receber os DOIS repositórios
 class RegistrarViewModelFactory(
-    private val transacaoRepository: TransacaoRepository,
-    private val categoriaRepository: CategoriaRepository
+    private val transacaoRepo: TransacaoRepository,
+    private val categoriaRepo: CategoriaRepository
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(RegistrarViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return RegistrarViewModel(transacaoRepository, categoriaRepository) as T
+            return RegistrarViewModel(transacaoRepo, categoriaRepo) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

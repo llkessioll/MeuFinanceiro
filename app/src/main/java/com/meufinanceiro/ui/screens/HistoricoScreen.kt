@@ -1,6 +1,5 @@
 package com.meufinanceiro.ui.screens
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -8,18 +7,19 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.room.Room
@@ -28,11 +28,10 @@ import com.meufinanceiro.backend.model.TipoTransacao
 import com.meufinanceiro.backend.model.TransacaoComCategoria
 import com.meufinanceiro.backend.repository.TransacaoRepository
 import com.meufinanceiro.ui.extensions.categoriaNome
+import com.meufinanceiro.ui.extensions.toCurrency
+import com.meufinanceiro.ui.extensions.toDateFormat
 import com.meufinanceiro.ui.viewmodel.HistoricoFactory
 import com.meufinanceiro.ui.viewmodel.HistoricoViewModel
-
-import java.text.SimpleDateFormat
-import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,26 +39,17 @@ fun HistoricoScreen(navController: NavController) {
 
     val context = LocalContext.current
 
-    // DATABASE
     val db = remember {
-        Room.databaseBuilder(
-            context,
-            AppDatabase::class.java,
-            "meu_financeiro.db"
-        ).build()
+        Room.databaseBuilder(context, AppDatabase::class.java, "meu_financeiro.db").build()
     }
-
-    // REPOSITORY REAL
-    val repository = remember {
-        TransacaoRepository(db.transacaoDao())
-    }
-
-    // VIEWMODEL
-    val viewModel: HistoricoViewModel = viewModel(
-        factory = HistoricoFactory(repository)
-    )
+    val repository = remember { TransacaoRepository(db.transacaoDao()) }
+    val viewModel: HistoricoViewModel = viewModel(factory = HistoricoFactory(repository))
 
     val lista by viewModel.transacoes.collectAsState()
+
+    LaunchedEffect(Unit) {
+        viewModel.atualizarLista()
+    }
 
     Scaffold(
         topBar = {
@@ -82,18 +72,53 @@ fun HistoricoScreen(navController: NavController) {
         ) {
 
             if (lista.isEmpty()) {
-                Box(
+                // ESTADO VAZIO
+                Column(
                     modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text("Nenhuma transação registrada", fontSize = 18.sp)
+                    Surface(
+                        modifier = Modifier.size(120.dp),
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.List,
+                                contentDescription = null,
+                                modifier = Modifier.size(60.dp),
+                                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    Text(
+                        text = "Nenhuma movimentação",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    Text(
+                        text = "Suas receitas e despesas aparecerão aqui.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 32.dp, vertical = 8.dp)
+                    )
                 }
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     items(lista) { item ->
                         TransacaoCard(
-                            item,
-                            // AQUI ESTAVA O ERRO: mudou de item.id para item.transacao.id
+                            transacao = item,
+                            // AQUI: Ao clicar, manda o ID para a rota "registrar?id=..."
+                            onClick = {
+                                navController.navigate("registrar?id=${item.transacao.id}")
+                            },
                             onDelete = { viewModel.deletar(item.transacao.id) }
                         )
                     }
@@ -106,9 +131,9 @@ fun HistoricoScreen(navController: NavController) {
 @Composable
 fun TransacaoCard(
     transacao: TransacaoComCategoria,
+    onClick: () -> Unit, // <--- NOVO PARÂMETRO
     onDelete: () -> Unit
 ) {
-    // Define cores baseadas no tipo
     val isReceita = transacao.transacao.tipo == TipoTransacao.RECEITA
 
     val containerColor = if (isReceita)
@@ -124,6 +149,7 @@ fun TransacaoCard(
     val icone = if (isReceita) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward
 
     Card(
+        onClick = onClick, // <--- CARD AGORA É CLICÁVEL
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = containerColor),
         modifier = Modifier.fillMaxWidth()
@@ -134,7 +160,6 @@ fun TransacaoCard(
                 .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Ícone indicativo (opcional, mas fica bonito)
             Surface(
                 shape = CircleShape,
                 color = valorColor.copy(alpha = 0.2f),
@@ -152,9 +177,7 @@ fun TransacaoCard(
 
             Spacer(modifier = Modifier.width(16.dp))
 
-            // Textos (Categoria e Descrição)
             Column(modifier = Modifier.weight(1f)) {
-                // 1. NOME DA CATEGORIA (Destaque)
                 Text(
                     text = transacao.categoriaNome,
                     style = MaterialTheme.typography.titleMedium,
@@ -162,7 +185,6 @@ fun TransacaoCard(
                     color = MaterialTheme.colorScheme.onSurface
                 )
 
-                // 2. DESCRIÇÃO (Se houver)
                 if (!transacao.transacao.descricao.isNullOrBlank()) {
                     Text(
                         text = transacao.transacao.descricao,
@@ -173,18 +195,16 @@ fun TransacaoCard(
                     )
                 }
 
-                // 3. DATA
                 Text(
-                    text = formatDate(transacao.transacao.dataMillis),
+                    text = transacao.transacao.dataMillis.toDateFormat(),
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                 )
             }
 
-            // Valor e Botão Delete
             Column(horizontalAlignment = Alignment.End) {
                 Text(
-                    text = "R$ %.2f".format(transacao.transacao.valor),
+                    text = transacao.transacao.valor.toCurrency(),
                     color = valorColor,
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp
@@ -204,8 +224,4 @@ fun TransacaoCard(
             }
         }
     }
-}
-fun formatDate(millis: Long): String {
-    val sdf = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
-    return sdf.format(Date(millis))
 }
